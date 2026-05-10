@@ -12,16 +12,109 @@
     return cleaned;
   }
 
+  function extractSymbolFromText(text) {
+    if (!text) return null;
+    const patterns = [
+      /\b([A-Z0-9._-]{1,32})\s*(?:•|·)\s*(?:NSE|BSE)\b/,
+      /\b(?:NSE|BSE)\s*[:\-]\s*([A-Z0-9._-]{1,32})\b/,
+      /\b([A-Z0-9._-]{1,32})\s*[:\-]\s*(?:NSE|BSE)\b/,
+      /\b([A-Z0-9._-]{1,32})\s*\((?:NSE|BSE)\)\b/
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      const symbol = normalizeSymbol(match?.[1] ?? null);
+      if (symbol && symbol !== "NSE" && symbol !== "BSE") return symbol;
+    }
+    return null;
+  }
+
+  function extractSymbolFromJson(root) {
+    if (!root || typeof root !== "object") return null;
+    const keys = new Set([
+      "symbol",
+      "ticker",
+      "tickerSymbol",
+      "tradingsymbol",
+      "tradingSymbol",
+      "displaySymbol",
+      "nseSymbol",
+      "bseSymbol"
+    ]);
+    const seen = new WeakSet();
+    const queue = [root];
+
+    while (queue.length > 0) {
+      const node = queue.shift();
+      if (!node || typeof node !== "object") continue;
+      if (seen.has(node)) continue;
+      seen.add(node);
+
+      if (Array.isArray(node)) {
+        for (const child of node) queue.push(child);
+        continue;
+      }
+
+      for (const [key, value] of Object.entries(node)) {
+        if (keys.has(key)) {
+          const symbol = normalizeSymbol(value);
+          if (symbol && symbol !== "NSE" && symbol !== "BSE") return symbol;
+        }
+
+        if (typeof value === "string") {
+          const embedded = extractSymbolFromText(value);
+          if (embedded) return embedded;
+          continue;
+        }
+
+        if (value && typeof value === "object") {
+          queue.push(value);
+        }
+      }
+    }
+
+    return null;
+  }
+
   function detectGrowwSymbol() {
     if (location.hostname !== "groww.in") return null;
-    if (!location.pathname.startsWith("/stocks/")) return null;
+    if (!location.pathname.startsWith("/stocks/") && !location.pathname.startsWith("/stock/")) return null;
+
+    const nextDataScript = document.getElementById("__NEXT_DATA__");
+    if (nextDataScript?.textContent) {
+      try {
+        const payload = JSON.parse(nextDataScript.textContent);
+        const symbol = extractSymbolFromJson(payload);
+        if (symbol) return symbol;
+      } catch {
+        // ignore
+      }
+    }
+
+    const jsonLdScripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+    for (const script of jsonLdScripts) {
+      if (!script.textContent) continue;
+      try {
+        const payload = JSON.parse(script.textContent);
+        const symbol = extractSymbolFromJson(payload);
+        if (symbol) return symbol;
+      } catch {
+        // ignore
+      }
+    }
+
+    const metaText = [
+      document.querySelector('meta[property="og:title"]')?.getAttribute("content"),
+      document.querySelector('meta[name="description"]')?.getAttribute("content"),
+      document.querySelector('meta[property="og:description"]')?.getAttribute("content"),
+      document.title
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const metaSymbol = extractSymbolFromText(metaText);
+    if (metaSymbol) return metaSymbol;
 
     const text = document.body?.innerText ?? "";
-    // Example: "RELIANCE •\nNSE"
-    const m =
-      text.match(/\b([A-Z0-9._-]{1,32})\s*•\s*(?:\n\s*)?NSE\b/) ??
-      text.match(/\b([A-Z0-9._-]{1,32})\s*•\s*(?:\n\s*)?BSE\b/);
-    return normalizeSymbol(m?.[1] ?? null);
+    return extractSymbolFromText(text);
   }
 
   function detectAngelOneSymbol() {
@@ -74,7 +167,6 @@
     if (!symbol) return;
 
     if (lastSent.url === url && lastSent.symbol === symbol) return;
-    lastSent = { url, symbol };
 
     try {
       await chrome.runtime.sendMessage({
@@ -83,8 +175,10 @@
         symbol,
         url
       });
+      // Only mark success after the background acknowledges; otherwise retries can fix cold SW / transient failures.
+      lastSent = { url, symbol };
     } catch (_err) {
-      // ignore
+      // Service worker may be asleep or message channel briefly unavailable; keep retrying scheduleDetectionWithRetries.
     }
   }
 

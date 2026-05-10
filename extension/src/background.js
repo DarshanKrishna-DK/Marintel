@@ -24,17 +24,64 @@ async function hasHostPermission(url) {
 }
 
 async function fetchIntelligence(backendBaseUrl, symbol) {
-  const res = await fetch(`${backendBaseUrl}/intelligence`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ symbol, type: "equity" })
+  try {
+    const res = await fetch(`${backendBaseUrl}/intelligence`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ symbol, type: "equity" })
+    });
+
+    const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text ? { message: text } : null;
+    }
+
+    const cache = res.headers.get("x-marintel-cache");
+
+    if (res.ok) return { ok: true, status: res.status, cache, data };
+
+    const msg =
+      (data && typeof data === "object" && typeof data.error?.message === "string" && data.error.message) ||
+      (data && typeof data === "object" && typeof data.message === "string" && data.message) ||
+      `HTTP ${res.status}`;
+    return { ok: false, status: res.status, cache, data, error: msg };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, status: 0, cache: null, data: null, error: msg };
+  }
+}
+
+async function handleFetch(symbol) {
+  const backendBaseUrl = await getBackendBaseUrl();
+  const permissionOk = await hasHostPermission(backendBaseUrl);
+  if (!permissionOk) {
+    const result = {
+      ok: false,
+      status: 0,
+      error: "Missing host permission for backend. Open extension Options and save the backend URL to grant permission."
+    };
+    await chrome.storage.local.set({
+      [`intelligence:${symbol}`]: { fetchedAt: new Date().toISOString(), ...result }
+    });
+    return result;
+  }
+
+  const result = await fetchIntelligence(backendBaseUrl, symbol);
+  await chrome.storage.local.set({
+    [`intelligence:${symbol}`]: { fetchedAt: new Date().toISOString(), ...result }
   });
+  return result;
+}
 
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-
-  const cache = res.headers.get("x-marintel-cache");
-  return { ok: res.ok, status: res.status, cache, data };
+async function refetchCurrentAssetIfAny() {
+  const local = await chrome.storage.local.get([STORAGE_CURRENT_ASSET_KEY]);
+  const asset = local[STORAGE_CURRENT_ASSET_KEY];
+  const symbol = typeof asset?.symbol === "string" ? asset.symbol.trim().toUpperCase() : "";
+  if (symbol.length === 0) return;
+  await handleFetch(symbol);
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -50,26 +97,25 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
 });
 
+/** After Options save or side-panel permission prompt, pull intelligence again without requiring a new navigation. */
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === "sync" && changes.backendBaseUrl) {
+    refetchCurrentAssetIfAny().catch(() => {
+      // ignore
+    });
+  }
+});
+
+if (chrome.permissions?.onAdded) {
+  chrome.permissions.onAdded.addListener(() => {
+    refetchCurrentAssetIfAny().catch(() => {
+      // ignore
+    });
+  });
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message) return;
-
-  const handleFetch = async (symbol) => {
-    const backendBaseUrl = await getBackendBaseUrl();
-    const permissionOk = await hasHostPermission(backendBaseUrl);
-    if (!permissionOk) {
-      return {
-        ok: false,
-        status: 0,
-        error: "Missing host permission for backend. Open extension Options and save the backend URL to grant permission."
-      };
-    }
-
-    const result = await fetchIntelligence(backendBaseUrl, symbol);
-    await chrome.storage.local.set({
-      [`intelligence:${symbol}`]: { fetchedAt: new Date().toISOString(), ...result }
-    });
-    return result;
-  };
 
   if (message.type === MSG_ASSET_DETECTED) {
     (async () => {
@@ -109,4 +155,3 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 });
-

@@ -1,7 +1,8 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "./lib/cn";
 import { MSG_REFRESH, STORAGE_CURRENT_ASSET_KEY, intelligenceKey } from "./lib/constants";
+import { ensureBackendHostPermission, resolveBackendBaseUrl } from "./lib/permissions";
 import type { MarintelCacheEntry, MarintelCurrentAsset, MarintelIntelligencePipelineResult } from "./lib/types";
 
 function formatPlatform(platform: string) {
@@ -87,6 +88,8 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
 
+  const currentAssetSymbolRef = useRef<string | null>(null);
+
   const activeSymbol = asset?.symbol ?? (symbolInput.trim().length > 0 ? symbolInput.trim().toUpperCase() : null);
 
   const parsed = useMemo(() => {
@@ -108,6 +111,7 @@ export default function App() {
       if (!mounted) return;
       const nextAsset = (local[STORAGE_CURRENT_ASSET_KEY] as MarintelCurrentAsset | undefined) ?? null;
       setAsset(nextAsset);
+      currentAssetSymbolRef.current = nextAsset?.symbol ?? null;
 
       if (nextAsset?.symbol) {
         const e = await getLocal<MarintelCacheEntry>([intelligenceKey(nextAsset.symbol)]);
@@ -119,13 +123,34 @@ export default function App() {
     const onChanged = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
       if (areaName !== "local") return;
       if (changes[STORAGE_CURRENT_ASSET_KEY]) {
-        const next = changes[STORAGE_CURRENT_ASSET_KEY]?.newValue as MarintelCurrentAsset | undefined;
-        setAsset(next ?? null);
+        const next = (changes[STORAGE_CURRENT_ASSET_KEY]?.newValue as MarintelCurrentAsset | undefined) ?? null;
+        setAsset(next);
+        currentAssetSymbolRef.current = next?.symbol ?? null;
+
+        // If we have cached intelligence already (or it changed in the same event), load it.
+        const nextSymbol = next?.symbol ?? null;
+        if (nextSymbol) {
+          const key = intelligenceKey(nextSymbol);
+          if (changes[key]) {
+            setEntry((changes[key]?.newValue as MarintelCacheEntry | undefined) ?? null);
+          } else {
+            setEntry(null);
+            getLocal<MarintelCacheEntry>([key])
+              .then((e) => setEntry((e[key] as MarintelCacheEntry | undefined) ?? null))
+              .catch(() => {
+                // ignore
+              });
+          }
+        } else {
+          setEntry(null);
+        }
       }
 
-      const symbol = (changes[STORAGE_CURRENT_ASSET_KEY]?.newValue as MarintelCurrentAsset | undefined)?.symbol ?? asset?.symbol;
-      if (symbol && changes[intelligenceKey(symbol)]) {
-        setEntry((changes[intelligenceKey(symbol)]?.newValue as MarintelCacheEntry | undefined) ?? null);
+      const symbol = currentAssetSymbolRef.current;
+      if (!symbol) return;
+      const key = intelligenceKey(symbol);
+      if (changes[key]) {
+        setEntry((changes[key]?.newValue as MarintelCacheEntry | undefined) ?? null);
       }
     };
 
@@ -141,13 +166,28 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const refresh = async (symbolOverride?: string) => {
+  const refresh = useCallback(async (symbolOverride?: string) => {
     const symbol = (symbolOverride ?? activeSymbol)?.trim().toUpperCase();
     if (!symbol) return;
 
     setPanelError(null);
     setRefreshing(true);
     try {
+      const backendUrl = await resolveBackendBaseUrl();
+      const perm = await ensureBackendHostPermission(backendUrl);
+      if (!perm.ok) {
+        if (perm.reason === "invalid_url") {
+          setPanelError("Invalid backend URL in Options. Open Options and set a URL like http://localhost:8787");
+        } else {
+          setPanelError(
+            `Host permission was denied for ${perm.pattern || "backend"}. Click Refresh again and allow access, or open Options and Save the backend URL.`
+          );
+        }
+        const e = await getLocal<MarintelCacheEntry>([intelligenceKey(symbol)]);
+        setEntry((e[intelligenceKey(symbol)] as MarintelCacheEntry | undefined) ?? null);
+        return;
+      }
+
       const res = (await chrome.runtime.sendMessage({ type: MSG_REFRESH, symbol })) as unknown as
         | { ok: boolean; status: number; error?: string }
         | undefined;
@@ -164,7 +204,55 @@ export default function App() {
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [activeSymbol]);
+
+  /** Opening the side panel is a user gesture; request backend host access early so automatic page detection can fetch. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const backendUrl = await resolveBackendBaseUrl();
+        await ensureBackendHostPermission(backendUrl);
+      } catch {
+        // ignore
+      }
+      if (cancelled) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** If the background cached a permission error for the detected symbol, retry fetch after the panel can grant host access. */
+  useEffect(() => {
+    const sym = asset?.symbol?.trim().toUpperCase();
+    if (!sym) return;
+
+    const permissionBlocked = (e: MarintelCacheEntry | null | undefined) =>
+      Boolean(
+        e &&
+          !e.ok &&
+          e.status === 0 &&
+          typeof e.error === "string" &&
+          (e.error.includes("Missing host permission") || e.error.includes("permission"))
+      );
+
+    let cancelled = false;
+    const id = window.setTimeout(async () => {
+      const key = intelligenceKey(sym);
+      const local = await getLocal<MarintelCacheEntry>([key]);
+      const ent = local[key] as MarintelCacheEntry | undefined;
+      if (cancelled) return;
+      if (permissionBlocked(ent)) {
+        await refresh(sym);
+      }
+    }, 150);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [asset?.symbol, asset?.detectedAt, refresh]);
 
   const openOptions = () => {
     chrome.runtime.openOptionsPage();
@@ -332,6 +420,123 @@ export default function App() {
             ))}
           </div>
         </Card>
+
+        {parsed?.traderSentiment || parsed?.priceOutlook ? (
+          <Card>
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-slate-50">Sentiment and outlook</div>
+              <div className="text-[11px] text-slate-400">Experimental</div>
+            </div>
+
+            {parsed.traderSentiment ? (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-semibold text-slate-50">Trader sentiment</div>
+                  {parsed.traderSentiment.label && typeof parsed.traderSentiment.score === "number" ? (
+                    <SignalBadge signal={parsed.traderSentiment.label} score={parsed.traderSentiment.score} />
+                  ) : null}
+                </div>
+                <div className="text-[11px] text-slate-400">{parsed.traderSentiment.note ?? "Source: StockTwits"}</div>
+
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+                    <div className="text-[10px] font-semibold text-slate-400">Bullish</div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-50">
+                      {displayValue(parsed.traderSentiment.bullishPct)}%{" "}
+                      <span className="text-[10px] font-medium text-slate-400">({displayValue(parsed.traderSentiment.bullishCount)})</span>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+                    <div className="text-[10px] font-semibold text-slate-400">Bearish</div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-50">
+                      {displayValue(parsed.traderSentiment.bearishPct)}%{" "}
+                      <span className="text-[10px] font-medium text-slate-400">({displayValue(parsed.traderSentiment.bearishCount)})</span>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+                    <div className="text-[10px] font-semibold text-slate-400">Messages</div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-50">
+                      {displayValue(parsed.traderSentiment.totalMessages)}
+                    </div>
+                  </div>
+                </div>
+
+                {parsed.traderSentiment.sampleMessages && parsed.traderSentiment.sampleMessages.length > 0 ? (
+                  <div className="mt-2 space-y-2">
+                    <div className="text-[11px] font-semibold tracking-wide text-slate-300/80">Recent posts</div>
+                    {parsed.traderSentiment.sampleMessages.slice(0, 3).map((m) => (
+                      <div key={`${m.id ?? "x"}:${m.createdAt ?? ""}`} className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-[11px] font-semibold text-slate-200">{m.username ?? "user"}</div>
+                          <div className="text-[11px] text-slate-400">{m.sentiment ?? "neutral"}</div>
+                        </div>
+                        <div className="mt-1 text-xs text-slate-200/85">{m.body}</div>
+                      </div>
+                    ))}
+                    {parsed.traderSentiment.url ? (
+                      <a
+                        href={parsed.traderSentiment.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block text-[11px] font-semibold text-sky-200/90 underline decoration-sky-400/30"
+                      >
+                        Open StockTwits
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {parsed.priceOutlook ? (
+              <div className={cn("space-y-2", parsed.traderSentiment ? "mt-4 border-t border-slate-800 pt-4" : "mt-3")}>
+                <div className="text-xs font-semibold text-slate-50">Price outlook (7D)</div>
+                <div className="text-[11px] text-slate-400">{parsed.priceOutlook.note ?? parsed.priceOutlook.method}</div>
+
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+                    <div className="text-[10px] font-semibold text-slate-400">Last</div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-50">
+                      {displayValue(parsed.priceOutlook.lastPrice)} {parsed.priceOutlook.currency ?? ""}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+                    <div className="text-[10px] font-semibold text-slate-400">Range (90%)</div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-50">
+                      {displayValue(parsed.priceOutlook.projectedLow)} to {displayValue(parsed.priceOutlook.projectedHigh)}
+                    </div>
+                    <div className="mt-1 text-[10px] font-medium text-slate-400">
+                      {displayValue(parsed.priceOutlook.projectedChangePctLow)}% to {displayValue(parsed.priceOutlook.projectedChangePctHigh)}%
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+                    <div className="text-[10px] font-semibold text-slate-400">Vol (daily)</div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-50">
+                      {displayValue(parsed.priceOutlook.volatilityDailyPct)}%
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+                    <div className="text-[10px] font-semibold text-slate-400">Analyst target</div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-50">
+                      {displayValue(parsed.priceOutlook.analystTarget)}
+                    </div>
+                  </div>
+                </div>
+
+                {parsed.priceOutlook.url ? (
+                  <a
+                    href={parsed.priceOutlook.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-[11px] font-semibold text-sky-200/90 underline decoration-sky-400/30"
+                  >
+                    Open Yahoo Finance
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
       </div>
     );
   })();

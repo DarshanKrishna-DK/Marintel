@@ -1,0 +1,11 @@
+{
+  "name": "marintel-extension",
+  "private": true,
+  "description": "Chrome MV3 wrapper; the React side panel is built from ./panel",
+  "scripts": {
+    "install": "npm install --prefix panel",
+    "build": "npm run build --prefix panel",
+    "dev": "npm run dev --prefix panel",
+    "lint": "npm run lint --prefix panel"
+  }
+}
