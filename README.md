@@ -1,6 +1,6 @@
 ## Marintel
 
-Zero-friction Indian equity market intelligence, delivered as a Chrome side panel.
+Zero-friction Indian equity market intelligence, delivered as a Chrome side panel/ extension.
 
 [![Status](https://img.shields.io/badge/MVP-product--ready-22c55e)](./Changelog.md)
 [![Backend](https://img.shields.io/badge/backend-Express%20%2B%20TypeScript-60a5fa)](./backend)
