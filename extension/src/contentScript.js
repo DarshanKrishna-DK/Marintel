@@ -8,6 +8,7 @@
   function normalizeSymbol(value) {
     if (!value) return null;
     const cleaned = String(value).trim().toUpperCase();
+    if (!/[A-Z]/.test(cleaned)) return null;
     if (!/^[A-Z0-9._-]{1,32}$/.test(cleaned)) return null;
     return cleaned;
   }
