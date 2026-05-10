@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Marintel",
+  "version": "0.1.0",
+  "description": "Zero-friction market intelligence side panel for Indian equities.",
+  "permissions": ["storage", "sidePanel"],
+  "host_permissions": [
+    "https://groww.in/*",
+    "https://kite.zerodha.com/*",
+    "https://angelone.in/*",
+    "https://*.angelone.in/*"
+  ],
+  "optional_host_permissions": ["http://localhost/*", "http://127.0.0.1/*", "https://*/*"],
+  "side_panel": {
+    "default_path": "panel-dist/index.html"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://groww.in/*",
+        "https://kite.zerodha.com/*",
+        "https://angelone.in/*",
+        "https://*.angelone.in/*"
+      ],
+      "js": ["src/contentScript.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "src/options.html",
+  "action": {
+    "default_title": "Marintel"
+  }
+}
+

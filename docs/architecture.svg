@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050713" />
+      <stop offset="0.5" stop-color="#070A1B" />
+      <stop offset="1" stop-color="#050713" />
+    </linearGradient>
+
+    <linearGradient id="strokeA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.95" />
+      <stop offset="0.55" stop-color="#60a5fa" stop-opacity="0.75" />
+      <stop offset="1" stop-color="#34d399" stop-opacity="0.85" />
+    </linearGradient>
+
+    <linearGradient id="strokeB" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.75" />
+      <stop offset="0.6" stop-color="#22d3ee" stop-opacity="0.8" />
+      <stop offset="1" stop-color="#34d399" stop-opacity="0.7" />
+    </linearGradient>
+
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="
+          1 0 0 0 0
+          0 1 0 0 0
+          0 0 1 0 0
+          0 0 0 0.55 0"
+        result="glow"
+      />
+      <feMerge>
+        <feMergeNode in="glow" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#60a5fa" />
+    </marker>
+
+    <style>
+      .title { font: 700 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: #e2e8f0; letter-spacing: 0.2px; }
+      .subtitle { font: 600 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: rgba(226,232,240,0.82); }
+      .label { font: 600 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: rgba(226,232,240,0.86); }
+      .muted { font: 500 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: rgba(226,232,240,0.64); }
+      .chip { font: 700 11px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; fill: rgba(226,232,240,0.85); }
+      .box { fill: rgba(2,6,23,0.55); stroke: rgba(148,163,184,0.22); stroke-width: 1; }
+      .panel { fill: rgba(2,6,23,0.6); stroke: url(#strokeA); stroke-opacity: 0.7; stroke-width: 1.5; }
+      .panelB { fill: rgba(2,6,23,0.6); stroke: url(#strokeB); stroke-opacity: 0.7; stroke-width: 1.5; }
+      .divider { stroke: rgba(148,163,184,0.18); stroke-width: 1; }
+      .flow { stroke: rgba(96,165,250,0.9); stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .flow2 { stroke: rgba(34,211,238,0.85); stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .flow3 { stroke: rgba(52,211,153,0.85); stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="760" fill="url(#bg)" />
+
+  <!-- Decorative glow -->
+  <g filter="url(#softGlow)" opacity="0.9">
+    <circle cx="250" cy="110" r="120" fill="rgba(34,211,238,0.09)" />
+    <circle cx="1120" cy="650" r="140" fill="rgba(52,211,153,0.08)" />
+    <circle cx="860" cy="120" r="150" fill="rgba(167,139,250,0.08)" />
+  </g>
+
+  <text x="60" y="70" class="title">Marintel architecture (MVP)</text>
+  <text x="60" y="98" class="subtitle">Browser extension + backend pipeline + live data sources, with cache and health telemetry</text>
+
+  <!-- Left: Clients -->
+  <g transform="translate(60,140)">
+    <rect class="panel" x="0" y="0" rx="16" ry="16" width="420" height="560" />
+    <text x="22" y="42" class="label">Clients</text>
+    <text x="22" y="66" class="muted">Runs in the judge's browser</text>
+    <line class="divider" x1="22" y1="86" x2="398" y2="86" />
+
+    <rect class="box" x="22" y="110" rx="12" ry="12" width="376" height="170" />
+    <text x="42" y="145" class="label">Chrome extension (MV3)</text>
+    <text x="42" y="170" class="muted">Content script detects symbols on Groww, Kite, Angel One</text>
+    <text x="42" y="196" class="muted">Background service worker calls backend and stores results</text>
+    <text x="42" y="222" class="muted">Side panel (React + Tailwind) renders the briefing</text>
+
+    <g transform="translate(42,240)">
+      <rect x="0" y="-14" rx="9" ry="9" width="110" height="22" fill="rgba(34,211,238,0.12)" stroke="rgba(34,211,238,0.35)" />
+      <text x="12" y="2" class="chip">side_panel</text>
+      <rect x="124" y="-14" rx="9" ry="9" width="122" height="22" fill="rgba(96,165,250,0.12)" stroke="rgba(96,165,250,0.35)" />
+      <text x="136" y="2" class="chip">storage.local</text>
+      <rect x="258" y="-14" rx="9" ry="9" width="122" height="22" fill="rgba(52,211,153,0.12)" stroke="rgba(52,211,153,0.35)" />
+      <text x="270" y="2" class="chip">host perms</text>
+    </g>
+
+    <rect class="box" x="22" y="306" rx="12" ry="12" width="376" height="170" />
+    <text x="42" y="341" class="label">Landing page (optional)</text>
+    <text x="42" y="366" class="muted">React + Tailwind + React Three Fiber trading scene</text>
+    <text x="42" y="392" class="muted">Live demo calls the same backend /intelligence endpoint</text>
+    <text x="42" y="418" class="muted">Useful when judges cannot install extensions quickly</text>
+
+    <g transform="translate(42,436)">
+      <rect x="0" y="-14" rx="9" ry="9" width="120" height="22" fill="rgba(167,139,250,0.12)" stroke="rgba(167,139,250,0.35)" />
+      <text x="12" y="2" class="chip">vite dev</text>
+      <rect x="132" y="-14" rx="9" ry="9" width="140" height="22" fill="rgba(34,211,238,0.12)" stroke="rgba(34,211,238,0.35)" />
+      <text x="144" y="2" class="chip">live demo</text>
+    </g>
+
+    <rect class="box" x="22" y="502" rx="12" ry="12" width="376" height="40" />
+    <text x="42" y="528" class="muted">Both clients call the backend over HTTP(S)</text>
+  </g>
+
+  <!-- Middle: Backend -->
+  <g transform="translate(520,170)">
+    <rect class="panelB" x="0" y="0" rx="16" ry="16" width="420" height="500" />
+    <text x="22" y="42" class="label">Marintel backend API</text>
+    <text x="22" y="66" class="muted">Node.js + Express + TypeScript</text>
+    <line class="divider" x1="22" y1="86" x2="398" y2="86" />
+
+    <rect class="box" x="22" y="110" rx="12" ry="12" width="376" height="156" />
+    <text x="42" y="146" class="label">Endpoints</text>
+    <text x="42" y="172" class="muted">GET /health - uptime, Redis ping, source reliability</text>
+    <text x="42" y="198" class="muted">POST /intelligence - dynamic pipeline (no mocks)</text>
+    <text x="42" y="224" class="muted">CORS allowlist with wildcard support</text>
+
+    <rect class="box" x="22" y="284" rx="12" ry="12" width="376" height="188" />
+    <text x="42" y="320" class="label">Pipeline (parallel, resilient)</text>
+    <text x="42" y="346" class="muted">1) Screener scrape (Anakin URL Scraper)</text>
+    <text x="42" y="372" class="muted">2) Filings + SEBI + News (Anakin Search)</text>
+    <text x="42" y="398" class="muted">3) Synthesis + signal score (Groq LLM)</text>
+    <text x="42" y="424" class="muted">4) Cache result (Upstash Redis) with 30 min TTL</text>
+  </g>
+
+  <!-- Right: External services -->
+  <g transform="translate(980,140)">
+    <rect class="panel" x="0" y="0" rx="16" ry="16" width="360" height="560" />
+    <text x="22" y="42" class="label">External services</text>
+    <text x="22" y="66" class="muted">Free tiers (hackathon-friendly)</text>
+    <line class="divider" x1="22" y1="86" x2="338" y2="86" />
+
+    <rect class="box" x="22" y="110" rx="12" ry="12" width="316" height="130" />
+    <text x="42" y="146" class="label">Anakin API</text>
+    <text x="42" y="172" class="muted">URL Scraper - Screener fundamentals</text>
+    <text x="42" y="198" class="muted">Search - filings, SEBI actions, news</text>
+    <text x="42" y="224" class="muted">Timeouts + fallback browser scrape when needed</text>
+
+    <rect class="box" x="22" y="262" rx="12" ry="12" width="316" height="108" />
+    <text x="42" y="298" class="label">Groq</text>
+    <text x="42" y="324" class="muted">Low-latency LLM synthesis + scoring</text>
+    <text x="42" y="350" class="muted">Repair pass for strict JSON shaping</text>
+
+    <rect class="box" x="22" y="392" rx="12" ry="12" width="316" height="130" />
+    <text x="42" y="428" class="label">Upstash Redis</text>
+    <text x="42" y="454" class="muted">Cache key: marintel:intelligence:equity:SYMBOL</text>
+    <text x="42" y="480" class="muted">Header: x-marintel-cache = hit | miss</text>
+    <text x="42" y="506" class="muted">Speeds up repeat lookups for judges</text>
+  </g>
+
+  <!-- Flows -->
+  <path class="flow" d="M 480 370 C 540 370, 500 370, 520 370" />
+  <text x="430" y="350" class="muted">symbol</text>
+
+  <path class="flow2" d="M 480 520 C 540 520, 500 520, 520 520" />
+  <text x="402" y="500" class="muted">demo request</text>
+
+  <path class="flow" d="M 940 320 C 980 320, 960 320, 980 320" opacity="0" />
+
+  <path class="flow2" d="M 940 310 C 980 250, 960 230, 980 220" />
+  <text x="842" y="240" class="muted">scrape + search</text>
+
+  <path class="flow" d="M 940 420 C 980 400, 960 375, 980 324" />
+  <text x="842" y="360" class="muted">synthesize</text>
+
+  <path class="flow3" d="M 940 540 C 980 520, 960 500, 980 460" />
+  <text x="842" y="500" class="muted">cache</text>
+
+  <!-- Legend -->
+  <g transform="translate(520,690)">
+    <rect x="0" y="0" rx="14" ry="14" width="820" height="54" fill="rgba(2,6,23,0.6)" stroke="rgba(148,163,184,0.22)" />
+    <circle cx="28" cy="27" r="6" fill="rgba(96,165,250,0.9)" />
+    <text x="44" y="32" class="muted">HTTP calls</text>
+    <circle cx="150" cy="27" r="6" fill="rgba(34,211,238,0.85)" />
+    <text x="166" y="32" class="muted">Anakin data acquisition</text>
+    <circle cx="338" cy="27" r="6" fill="rgba(52,211,153,0.85)" />
+    <text x="354" y="32" class="muted">Caching and speedups</text>
+    <text x="560" y="32" class="muted">Phase 5 adds reliability telemetry into GET /health</text>
+  </g>
+</svg>
+
