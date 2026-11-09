@@ -1,4 +1,4 @@
-## Marintel
+<h1 align="center">Marintel</h1>
 
 Zero-friction Indian equity market intelligence, delivered as a Chrome side panel/ extension.
 
